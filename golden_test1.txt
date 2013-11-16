@@ -1,0 +1,12 @@
+Final list of all intervals: [time, duration, rate] 
+[0, 1, 0][1, 2, 55][3, 3, 0][6, 1, -40][7, 17, 0]
+Sugar Level:
+0 80 
+1 80 
+3 190 
+4.83333333333333 80 
+6 80 
+7 40 
+7.66666666666667 80 
+24 80 
+Total Glycation = 83.6363636363636 

@@ -114,11 +114,17 @@ sub calculateActivityIntervalSugar($$)
 
 # Compute the glycation of the interval
 	my $glycation =0;
-	if($endSugar > $GLYCATION_LEVEL){
-		my $glyHours = ($endSugar - $GLYCATION_LEVEL)/$slope;
-		$glyHours = ($glyHours > $size) ? $size : $glyHours;
-		$glycation += $glyHours * $MINS_IN_HOUR;
+	my $glyHours = 0;
+	if(($slope > 0) && ($endSugar > $GLYCATION_LEVEL)){
+		$glyHours = ($endSugar - $GLYCATION_LEVEL)/$slope;
+	} 
+	elsif(($slope < 0) && ($startSugar > $GLYCATION_LEVEL)){
+		$glyHours = ($GLYCATION_LEVEL - $startSugar)/$slope; # both num and div are negative 
 	}
+
+	$glyHours = ($glyHours > $size) ? $size : $glyHours;
+	$glycation += $glyHours * $MINS_IN_HOUR;
+
 
 # print the interval - used to generate the graph 
 #TODO: Avoid printing in functions 
@@ -231,7 +237,7 @@ sub addAllInputIntervals($$){
 		while($index < scalar(@$aref_intervalList)){
 			my $href_currInt = $aref_intervalList->[$index];
 # if the input Interval is intersecting the current window,
-			if($href_currInt->{"time"} + $href_currInt->{"size"} < $href_inputInterval->{"time"}){
+			if($href_currInt->{"time"} + $href_currInt->{"size"} <= $href_inputInterval->{"time"}){
 				$index++;
 			}
 			else{
