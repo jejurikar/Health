@@ -9,6 +9,9 @@ use Data::Dumper;
 
 my $NORM_SUGAR = 80;
 my $NORM_RATE = 60;
+my $GLYCATION_LEVEL = 150;
+my $MINS_IN_HOUR = 60;
+
 
 # Function: splitInterval
 #   Splits a given interval into two intervals
@@ -97,17 +100,31 @@ sub calculateActivityIntervalSugar($$)
 	my $size = $href_interval->{size};
 
 #print the beginning of the time=0 interval
+# TODO: Not good to have side-effects (printing) in this function.
+# To avoid this, store the following with the intervals (startSugar)
+# And for the normInervals store the "normIntSize, and maybe the normRate)
 	if($time==0){
-		print ("[$time, $startSugar]");
+		print ("$time $startSugar \n");
 	}
 
+#compute the sugar level contribution of the interval 
 	my $intSugar =  $size * $slope;
-	my $totalSugar = $startSugar + $intSugar;
+	my $endSugar = $startSugar + $intSugar;
 	my $endpoint = $href_interval->{time} + $href_interval->{size};
 
-	print ("[$endpoint, $totalSugar]");
+# Compute the glycation of the interval
+	my $glycation =0;
+	if($endSugar > $GLYCATION_LEVEL){
+		my $glyHours = ($endSugar - $GLYCATION_LEVEL)/$slope;
+		$glyHours = ($glyHours > $size) ? $size : $glyHours;
+		$glycation += $glyHours * $MINS_IN_HOUR;
+	}
 
-	return $intSugar;
+# print the interval - used to generate the graph 
+#TODO: Avoid printing in functions 
+	print ("$endpoint $endSugar \n");
+
+	return ($intSugar, $glycation);
 }
 
 
@@ -124,31 +141,29 @@ sub calculateNormIntervalSugar($$)
 	my $href_normInterval = \%normInterval;
 
 # Calc normalization sugar 
-	my $sugar=0;
+	my ($sugar,$glycation);
 	$slope = ($startSugar > $NORM_SUGAR) ? -$NORM_RATE : $NORM_RATE;
 	my $normIntSize = (abs($startSugar - $NORM_SUGAR))/60;
 
-	$href_normInterval->{slope}= $slope;
-	if($normIntSize >= $href_interval->{"size"}){
-# time and size does not change 
-		calculateActivityIntervalSugar($href_normInterval, $startSugar);
-	}
-	else{
-		if($normIntSize){ # non-zero intervals need to be processed
-# same slope as above (-/+NORM_RATE)
+	$normIntSize = ($normIntSize > $size) ? $size : $normIntSize;
+	my $remainIntSize = $size - $normIntSize;
+
+	($sugar, $glycation) = (0,0);
+	if($normIntSize){ # non-zero intervals need to be processed
 # start remains unchanged
-			$href_normInterval->{size} = $normIntSize; #change to norm size 
-#$sugar = $NORM_SUGAR - $startSugar; 
-			$sugar +=calculateActivityIntervalSugar($href_normInterval, $startSugar);  
-		}
-# There are two intervals in this case 
+		$href_normInterval->{slope}= $slope;
+		$href_normInterval->{size} = $normIntSize; #change to norm size 
+		($sugar,$glycation) = calculateActivityIntervalSugar($href_normInterval, $startSugar);  
+	}
+	if($remainIntSize){
 		$href_normInterval->{time} += $normIntSize;
 		$href_normInterval->{size} =  $href_interval->{size} - $normIntSize;
 		$href_normInterval->{slope} = 0;
-		$sugar +=calculateActivityIntervalSugar($href_normInterval, $startSugar + $sugar);   # this is zero 
+		my ($intSugar,$intGlycation) = calculateActivityIntervalSugar($href_normInterval, $startSugar + $sugar); 
+		$sugar += $intSugar;
+		$glycation += $intGlycation;
 	}
-
-	return $sugar;
+	return ($sugar, $glycation);
 }
 
 sub calculateSugarLevel($)
@@ -157,6 +172,7 @@ sub calculateSugarLevel($)
 
 	my $i=0;
 	my $totalSugar;
+	my $totalGlycation;
 
 	$totalSugar= $NORM_SUGAR;
 	print "Sugar Level:\n";
@@ -167,14 +183,18 @@ sub calculateSugarLevel($)
 		my $time = $href_currInt->{time};
 		my $size = $href_currInt->{size};
 
+		my ($intSugar, $intGlycation);
 		if($slope !=0 ){#This is a food/activity interval
-			$totalSugar += calculateActivityIntervalSugar($href_currInt, $totalSugar);
+			($intSugar, $intGlycation) = calculateActivityIntervalSugar($href_currInt, $totalSugar);
 		}
-		else #if($totalSugar!= $NORM_SUGAR)
-		{# Normalization 
-			$totalSugar += calculateNormIntervalSugar($href_currInt, $totalSugar);
+		else # Normalization interval
+		{
+			($intSugar, $intGlycation) = calculateNormIntervalSugar($href_currInt, $totalSugar);
 		}
+		$totalSugar += $intSugar;
+		$totalGlycation += $intGlycation;
 	}
+	return ($totalSugar, $totalGlycation);
 }
 
 
@@ -187,13 +207,14 @@ sub readTestFile($)
 	while (<MYFILE>) { 
 		chomp;
 		my $line = $_;
-		my @arr = split(/ +/, $line);  #  space separated elements
-			push (@inputList,
-					{"time" => $arr[0], 
-					"size"  => $arr[1], 
-					"slope" => $arr[2]
-					} 
-			     );
+#  space separated elements
+		my @arr = split(/ +/, $line);  
+		push (@inputList,
+				{"time" => $arr[0], 
+				"size"  => $arr[1], 
+				"slope" => $arr[2]
+				} 
+		     );
 	}
 	close (MYFILE); 
 
@@ -223,6 +244,19 @@ sub addAllInputIntervals($$){
 	return;
 }
 
+sub printIntervalList($)
+{
+	my ($aref_intervalList) = @_;
+
+	print "Final list of all intervals: [time, duration, rate] \n";
+#print Dumper(@$aref_intervalList);
+	foreach my $href_currInt(@$aref_intervalList){
+		print ("[$href_currInt->{time}, $href_currInt->{size}, $href_currInt->{slope}]");
+	}
+	print "\n";
+	return;
+}
+
 sub main()
 {
 # init a 24 hour window, staring at time=0
@@ -237,24 +271,17 @@ sub main()
 	(scalar(@ARGV) == 1) or die "Incorrect format: test filename expected e.g. \n perl graph.pl test_file\n";
 
 	my $aref_inputList = readTestFile($ARGV[0]);
-	print Dumper($aref_inputList);
+	#print Dumper($aref_inputList);
 
 # Add all input intervals to form the final list of intervals
 	addAllInputIntervals($aref_intervalList, $aref_inputList);
 
-	print "Here is the final list: \n";
-#print Dumper(@$aref_intervalList);
-	foreach my $href_currInt(@$aref_intervalList){
-		print ("[$href_currInt->{time}, $href_currInt->{size}, $href_currInt->{slope}]");
-	}
-	print "\n";
+	printIntervalList($aref_intervalList);
 
-	calculateSugarLevel($aref_intervalList);
+	my($finalSugar, $totalGlycation) = calculateSugarLevel($aref_intervalList);
+	print ("Total Glycation = $totalGlycation \n")
 }
-
 
 main();
 
-
-#  splitInterval($aref_intervalList, 0,4);
 #	addIntervalAtIndex($aref_intervalList, 0,{"time" => 1, "size" =>2, "slope" => 55});
