@@ -66,7 +66,11 @@ sub main()
 
 	DayActivity::printIntervalList($aref_dayActList);
 
-	my($finalSugar, $totalGlycation) = DayActivity::calculateSugarLevel($aref_dayActList);
+	DayActivity::updateIntSugarLevel($aref_dayActList);
+
+	DayActivity::printSugarGraph($aref_dayActList);
+
+	my $totalGlycation = DayActivity::computeDayGlycation($aref_dayActList);
 	print ("Total Glycation = $totalGlycation \n")
 }
 

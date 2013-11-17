@@ -5,6 +5,13 @@ use Exporter;
 
 use Interval;
 
+# TODO: Have a common place and "export" the value to other PM files 
+my $NORM_SUGAR = 80;
+my $NORM_RATE = 60;
+my $GLYCATION_LEVEL = 150;
+my $MINS_IN_HOUR = 60;
+
+
 # Below variables are similar to private vars in the class 
 # More like a "singleton class", cannot have two objects.
 # We can use "real class" to address this
@@ -117,12 +124,6 @@ sub printIntervalList($)
 #   Below are all the interval calculations 
 #
 
-my $NORM_SUGAR = 80;
-my $NORM_RATE = 60;
-my $GLYCATION_LEVEL = 150;
-my $MINS_IN_HOUR = 60;
-
-
 
 sub calculateActivityIntervalSugar($$)
 {
@@ -205,7 +206,7 @@ sub calculateNormIntervalSugar($$)
 	return ($sugar, $glycation);
 }
 
-sub calculateSugarLevel($)
+sub updateIntSugarLevel($)
 {
 	my ($aref_dayActList) = @_;
 
@@ -222,19 +223,61 @@ sub calculateSugarLevel($)
 		my $time = $href_currInt->{time};
 		my $size = $href_currInt->{size};
 
-		my ($intSugar, $intGlycation);
+		#Update the startSugar for Interval
+		Interval::updateStartSugar($href_currInt, $totalSugar);
+		
 		if($slope !=0 ){#This is a food/activity interval
-			($intSugar, $intGlycation) = calculateActivityIntervalSugar($href_currInt, $totalSugar);
+			$totalSugar += Interval::computeActIntSugar($href_currInt);
 		}
 		else # Normalization interval
 		{
-			($intSugar, $intGlycation) = calculateNormIntervalSugar($href_currInt, $totalSugar);
-		}
-		$totalSugar += $intSugar;
-		$totalGlycation += $intGlycation;
+			$totalSugar += Interval::computeNormIntSugar($href_currInt);
+                }
+
 	}
-	return ($totalSugar, $totalGlycation);
 }
+
+sub printSugarGraph($)
+{
+	my ($aref_dayActList) = @_;
+
+	foreach my $href_currInt (@$aref_dayActList){
+
+		my $slope = $href_currInt->{slope};
+
+		if($slope !=0 ){#This is a food/activity interval
+			Interval::printActInterval($href_currInt);
+		}
+		else # Normalization interval
+		{
+			Interval::printNormInterval($href_currInt);
+                }
+
+	}
+}
+
+
+sub computeDayGlycation($)
+{
+	my ($aref_dayActList) = @_;
+
+	my $totalGlycation =0;
+	foreach my $href_currInt (@$aref_dayActList){
+
+		my $slope = $href_currInt->{slope};
+
+		if($slope !=0 ){#This is a food/activity interval
+			$totalGlycation += Interval::computeActIntGlycation($href_currInt);
+		}
+		else # Normalization interval
+		{
+			$totalGlycation += Interval::computeNormIntGlycation($href_currInt);
+                }
+
+	}
+	return $totalGlycation;
+}
+
 
 
 1;
