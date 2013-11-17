@@ -58,6 +58,5 @@ sub splitInterval($$)
 }
 
 
-
 1;
 

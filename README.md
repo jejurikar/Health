@@ -11,6 +11,13 @@ Note: the duration is the time interval over which the activity effects the suga
 
 10        1         -40      # At time 10:00 am, an excercise (effect duration 1 hr) with of EI=40 was performed
 
+Assumptions:
+
+- Preprocessing performed to contevert the daily activity (food, exercise) to the form used as input data
+ 
+- The test intervals are sorted by time (else pre-process to sort them)
+
+
 ------------------------------------------------------------------
 
 Program 2: randomShuffle.pl
