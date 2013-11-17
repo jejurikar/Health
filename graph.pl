@@ -2,93 +2,45 @@
 
 # @Copyright 2013: 
 # This program computes the blood sugar level graph as per the below definition.
+# 
+# TODO: 
+# Object Oriented Design (OOD): Have a object oriented design for coe maintainence and testing.
+# Perl: 
+#   Perl is not designed from the ground up with OOD is mind. The current file should be split into
+#   packages (.pm files) for having more modular code. This will enable easy "unit testing" of basic
+#   building blocks of the code.
+#
+# Python (or othe object oriented language, C++, Java etc.)
+#   The object oriented design will look as follows:
+# class Interval:
+# 	private: time, size, slope
+# 	public: 
+# 		Interval($$$); # Constructor
+# 		Interval splitInterval(); # returns the new interval (after splitting existing one)
+#
+# class DayActivity:
+# 	private: list(partition) of Intervals 
+# 	public: 
+# 		DayActivity(class Interval); # This will be the initial inteval (0,24,0)
+#               addInterval;
+#
+# class ReadInputFile:
+#	private: 
+#	       list of Intervals 
+#	public: 
+#	 	ReadInputFile($fileName) 
 #
 
 use strict;
 use Data::Dumper;
+use ReadInput;
+use DayActivity;
 
 my $NORM_SUGAR = 80;
 my $NORM_RATE = 60;
 my $GLYCATION_LEVEL = 150;
 my $MINS_IN_HOUR = 60;
 
-
-# Function: splitInterval
-#   Splits a given interval into two intervals
-# Arguments:
-#   $aref_intervalList: the list of all intervals 
-#   $index: The index of the interval that need to be split
-#   $sizeLeft: the size of the first interval, the  left side interval
-#           size of right side interval = original size - sizeLeft
-#
-sub splitInterval($$$)
-{
-	my ($aref_intervalList, $index, $sizeLeft) = @_;
-
-# make a copy (new) of the interval and modify new Interval (right side interval)
-	my %newInt = %{$aref_intervalList->[$index]};   # convert the hash ref to a new hash
-	$newInt{"time"} += $sizeLeft;
-	$newInt{"size"} -= $sizeLeft;
-# slope remains the same 
-
-# modify the original Interval (interval on the left hand side)
-	my $href_origInt = $aref_intervalList->[$index];   # hash ref 
-	$href_origInt->{"size"} = $sizeLeft;
-#slope and time of left(original) window is unchanged 
-
-# Add the new element 'after' splitting (i.e. @ index +1)
-	splice(@$aref_intervalList, $index+1,0, \%newInt);
-
-	return;
-}
-
-
-# Function: addIntervalAtIndex
-#       Add the new interval to the existing list of intervals. The index in the original list is passed. The process can result in the addition of new intervals to the list (i.e. can result in many other intervals or just updation of existing intervals).
-# Arguments:
-#   $aref_intervalList: the list of all intervals 
-#   $index: The index in the intervals where the new interval falls and should be added. 
-#   $href_newInt: The new interval with all the params 
-#           
-
-sub addIntervalAtIndex($$$)
-{
-	my ($aref_intervalList, $index, $href_newInt) = @_;
-
-	my $done=0;
-	do{
-# If the start times are not aligned, align the new interval by splitting the current interval
-		my $href_currInt = $aref_intervalList->[$index];
-		if($href_currInt->{"time"} < $href_newInt->{"time"}){
-			my $leftSize = $href_newInt->{"time"} - $href_currInt->{"time"}; 
-			splitInterval($aref_intervalList, $index, $leftSize); # Aligns start time of two intervals
-			$index++; 
-		}
-
-#Now the new Interval and current interval is aligned 
-		$href_currInt = $aref_intervalList->[$index];
-		if($href_currInt->{"size"} == $href_newInt->{"size"}){
-			$href_currInt->{"slope"} += $href_newInt->{"slope"};
-			$done=1;
-		}
-		elsif($href_currInt->{"size"} > $href_newInt->{"size"}){
-			my $leftSize = $href_newInt->{"size"} ; 
-			splitInterval($aref_intervalList, $index, $leftSize);
-			$href_currInt->{"slope"} += $href_newInt->{"slope"}; # combine the interval contributions (slope)
-			$done=1;
-		}
-		else{ # the new interval is longer than the current interval: 
-# split the new interval and add contribution to current interval
-
-			$href_currInt->{"slope"} += $href_newInt->{"slope"}; # add contribution to existing interval
-			$href_newInt->{"time"} -=  $href_currInt->{"size"};  # reduce the new interval size
-			$href_newInt->{"size"} -=  $href_currInt->{"size"};
-			$index++; #continue on adding the reamining portion of new interval to the list
-		}
-
-	}while(!$done)
-
-}
 
 
 sub calculateActivityIntervalSugar($$)
@@ -204,47 +156,13 @@ sub calculateSugarLevel($)
 }
 
 
-sub readTestFile($)
+sub addAllInputIntervals($$)
 {
-	my ($filename) = @_;
-
-	my @inputList;
-	open (MYFILE, $filename) or die "File not found: $filename \n";
-	while (<MYFILE>) { 
-		chomp;
-		my $line = $_;
-#  space separated elements
-		my @arr = split(/ +/, $line);  
-		push (@inputList,
-				{"time" => $arr[0], 
-				"size"  => $arr[1], 
-				"slope" => $arr[2]
-				} 
-		     );
-	}
-	close (MYFILE); 
-
-	return \@inputList;
-#print Dumper(\@inputList);
-}
-
-sub addAllInputIntervals($$){
 	my ($aref_intervalList, $aref_inputList) = @_;
 
-	my $index=0;
 	foreach my $href_inputInterval (@$aref_inputList)
 	{
-		while($index < scalar(@$aref_intervalList)){
-			my $href_currInt = $aref_intervalList->[$index];
-# if the input Interval is intersecting the current window,
-			if($href_currInt->{"time"} + $href_currInt->{"size"} <= $href_inputInterval->{"time"}){
-				$index++;
-			}
-			else{
-				addIntervalAtIndex($aref_intervalList, $index, $href_inputInterval);
-				last; # break from the while loop;
-			}
-		}
+		DayActivity::addInterval($aref_intervalList, $href_inputInterval);
 	}
 
 	return;
@@ -266,17 +184,12 @@ sub printIntervalList($)
 sub main()
 {
 # init a 24 hour window, staring at time=0
-	my $aref_intervalList= [ 
-	{ 
-		time=>0,
-		size=>24,
-		slope=>0
-	}
-	];
-
 	(scalar(@ARGV) == 1) or die "Incorrect format: test filename expected e.g. \n perl graph.pl test_file\n";
 
-	my $aref_inputList = readTestFile($ARGV[0]);
+
+	my $aref_inputList = ReadInput::readTestFile($ARGV[0]);
+
+        my $aref_intervalList = DayActivity::initDayActivity();
 	#print Dumper($aref_inputList);
 
 # Add all input intervals to form the final list of intervals
