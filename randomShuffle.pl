@@ -32,48 +32,99 @@
 use strict;
 use Data::Dumper;
 
-sub readTop500File($$$)
-{
-# TODO: write and test the code;
-	my ($filename, $offset, $size) = @_;
+# using global variable to simulate a database like record read/write API
+ my $aref_top500List; 
 
-	my @inputList;
+sub readRecord($)
+{
+	my ($index) = @_;
+
+	(ref($aref_top500List) eq "ARRAY") or die "Error: DB not initialized (file not read)\n";
+	return $aref_top500List->[$index];
+}
+
+
+sub readTop500File($)
+{
+	my ($filename) = @_;
+
+	my @top500List;
 	open (MYFILE, $filename) or die "File not found: $filename \n";
-	my $rank =0 ;
 	while (<MYFILE>) { 
 		chomp;
 		my $line = $_;
-# skip the entries till the offset
-		if ($rank < $offset){$rank++; next;} 
-		if ($rank > $offset + $size){last;} 
-		push (@inputList, $line)
+		push (@top500List, $line)
 	}
 	close (MYFILE); 
 
-	return \@inputList;
-#print Dumper(\@inputList);
+	return \@top500List;
 }
-sub computeRandomSample($)
-{
-	my ($aref_array) = @_;
-# TODO: write code;
 
-	return;
+# Function: Get a random sample of sampleSize(k) from the totalRecords(n). 
+#           The totalRecords(n)  by parametersa 0 ($totalRecords). 
+#
+#Input:
+#   $ 0: The start offset within the top500
+#   $totalRecords(n): Total number of records to sample from (staring from 0)
+#   $sampleSize(k) : The size of the sample to compute  
+#
+#Return:
+#   $the list of record indexes that constitute the random sample 
+
+
+# Use the "Reservoir Sampling" Algorithm by Vitter et. al.
+# This ensures that each record is slected with equal probability (from the records sampled).
+#
+sub computeRandomSample($$)
+{
+	my ($totalRecords, $sampleSize) = @_;
+
+	my @sampleArray; # it contains the indexes of the records (not the records)
+#Fill the reservoir (the initial sample is first k records)
+	for(my $i=0; $i < $sampleSize; $i++){
+		$sampleArray[$i] = readRecord($i);
+	}
+
+#sample the remaining indexes, replacing the reservoir as follows
+	for(my $i=$sampleSize; $i < $totalRecords; $i++){
+# Get a random j, such that  0 <= j <= i
+# int(rand(n)) retuns a number between 0..n-1 i.e. (0<= r <= n-1)
+# So use rand($i+1)
+		my $j = int(rand($i+1));
+
+		if($j < $sampleSize){
+			$sampleArray[$j] = readRecord($i); 
+# If reading records from database, read the record[$i] only when it is selected in the sample.
+		}
+	}
+	return \@sampleArray;
 }
 
 sub main()
-{
+{ 
+	my $totalRecords = $ARGV[0];
+	my $sampleSize = $ARGV[1];
 
-	print "No code is implemented as of now \n";
+        (scalar(@ARGV) == 2) or 
+	die "Incorrect Parameters e.g. perl randomShuffle  30 4";
 
+	 (($totalRecords <= 500) && ($sampleSize <= $totalRecords)) or 
+	die "Invalid Parameters e.g. perl randomShuffle  30 4 # (ARGV[1] < 500, ARGV[1] < ARGV[0])";
+
+	$aref_top500List = readTop500File("top500.txt");
+#print Dumper($aref_top500List);
+
+	my $aref_sample = computeRandomSample($totalRecords,$sampleSize);
+	foreach my $rec (@$aref_sample){
+		print "$rec \n";
+	}
 }
 
-#main();
+main();
 
-foreach my $i (1..10)
-{
-# int(rand(n)) retuns a number between 0..n-1 i.e. (0<= r <= n-1)
-	my $r = int(rand(10));
-	print(" i=$i $r \n");
-}
 
+#foreach my $i (0..500-1)
+#{
+#	print("$i  NAME_$i \n");
+#}
+#
