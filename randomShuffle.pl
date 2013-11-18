@@ -64,7 +64,7 @@ sub readTop500File($)
 #           The totalRecords(n)  by parametersa 0 ($totalRecords). 
 #
 #Input:
-#   $ 0: The start offset within the top500
+#   $ 0: The start startOffset within the top500
 #   $totalRecords(n): Total number of records to sample from (staring from 0)
 #   $sampleSize(k) : The size of the sample to compute  
 #
@@ -75,22 +75,22 @@ sub readTop500File($)
 # Use the "Reservoir Sampling" Algorithm by Vitter et. al.
 # This ensures that each record is slected with equal probability (from the records sampled).
 #
-sub computeRandomSample($$)
+sub computeRandomSample($$$)
 {
-	my ($totalRecords, $sampleSize) = @_;
+	my ($startOffset, $totalRecords, $sampleSize) = @_;
 
 	my @sampleArray; # it contains the indexes of the records (not the records)
 #Fill the reservoir (the initial sample is first k records)
 	for(my $i=0; $i < $sampleSize; $i++){
-		$sampleArray[$i] = readRecord($i);
+		$sampleArray[$i] = readRecord($startOffset + $i);
 	}
 
 #sample the remaining indexes, replacing the reservoir as follows
-	for(my $i=$sampleSize; $i < $totalRecords; $i++){
+	for(my $i=$startOffset + $sampleSize; $i < $startOffset + $totalRecords; $i++){
 # Get a random j, such that  0 <= j <= i
 # int(rand(n)) retuns a number between 0..n-1 i.e. (0<= r <= n-1)
 # So use rand($i+1)
-		my $j = int(rand($i+1));
+		my $j = int(rand($i - $startOffset +1));
 
 		if($j < $sampleSize){
 			$sampleArray[$j] = readRecord($i); 
@@ -102,19 +102,21 @@ sub computeRandomSample($$)
 
 sub main()
 { 
-	my $totalRecords = $ARGV[0];
-	my $sampleSize = $ARGV[1];
+	my $startOffset = $ARGV[0];
+	my $totalRecords = $ARGV[1];
+	my $sampleSize = $ARGV[2];
 
-        (scalar(@ARGV) == 2) or 
+        (scalar(@ARGV) == 3) or 
 	die "Incorrect Parameters e.g. perl randomShuffle  30 4";
 
-	 (($totalRecords <= 500) && ($sampleSize <= $totalRecords)) or 
-	die "Invalid Parameters e.g. perl randomShuffle  30 4 # (ARGV[1] < 500, ARGV[1] < ARGV[0])";
+         my $maxRecords = $startOffset + $totalRecords;
+	 (($maxRecords <= 500) && ($sampleSize <= $totalRecords)) or 
+	die "Invalid Parameters e.g. perl randomShuffle 100 30 4 # "; # (ARGV[1] < 500, ARGV[1] < ARGV[0])
 
 	$aref_top500List = readTop500File("top500.txt");
 #print Dumper($aref_top500List);
 
-	my $aref_sample = computeRandomSample($totalRecords,$sampleSize);
+	my $aref_sample = computeRandomSample($startOffset, $totalRecords,$sampleSize);
 	foreach my $rec (@$aref_sample){
 		print "$rec \n";
 	}
